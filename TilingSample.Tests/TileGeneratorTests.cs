@@ -26,11 +26,12 @@ namespace TilingSample.Tests
         [InlineData(1.0f)]
         [InlineData(0.5f)]
         [InlineData(0.25f)]
+        [InlineData(0.125f)]
         public void CanRenderAtOriginWithDifferentZoomFactors(float zoomFactor)
         {
             var tileDir = Path.Combine(Environment.CurrentDirectory, "tiles");
             var rndr = new TileRenderer(800, 600);
-            var fn = Path.Combine(Environment.CurrentDirectory, $"x0_y0-{zoomFactor.ToString(CultureInfo.InvariantCulture)}-rnder{rndr.Width}x{rndr.Height}.jpeg");
+            var fn = Path.Combine(Environment.CurrentDirectory, $"x0_y0-z{(1f/zoomFactor).ToString(CultureInfo.InvariantCulture)}-rnder{rndr.Width}x{rndr.Height}.jpeg");
 
 
             rndr.RenderBitmap(tileDir, fn, 0, 0, zoomFactor);
@@ -44,7 +45,7 @@ namespace TilingSample.Tests
         {
             var tileDir = Path.Combine(Environment.CurrentDirectory, "tiles");
             var rndr = new TileRenderer(800, 600);
-            var fn = Path.Combine(Environment.CurrentDirectory, $"x1700_y900-{zoomFactor.ToString(CultureInfo.InvariantCulture)}-rnder{rndr.Width}x{rndr.Height}.jpeg");
+            var fn = Path.Combine(Environment.CurrentDirectory, $"x1700_y900z-{(1f / zoomFactor).ToString(CultureInfo.InvariantCulture)}-rnder{rndr.Width}x{rndr.Height}.jpeg");
 
 
             rndr.RenderBitmap(tileDir, fn, 1700, 900, zoomFactor);

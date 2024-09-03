@@ -1,7 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Text;
 using SkiaSharp;
 
 namespace TilingSample
@@ -26,11 +24,16 @@ namespace TilingSample
         /// <returns></returns>
         public SKBitmap RenderBitmap(string tileFolderPath, float offsetX, float offsetY, float zoomFactor = 1)
         {
+            var tileSize = TileConstants.TileSize;
+
             SKBitmap bitmap = new SKBitmap(Width, Height);
             using var canvas = new SKCanvas(bitmap);
             // Calculate the appropriate zoom level from the zoom factor
             // Higher zoomFactor corresponds to lower zoom level folder (z0, z1, etc.)
             int zoomLevel = (int)Math.Round(Math.Log(1f / zoomFactor, 2)); // Correct zoom level calculation
+            
+            // Calculate the size of each tile at the current zoom level
+            float tileSizeAtZoom = tileSize * zoomFactor;
 
             // Apply scaling to the canvas to handle zoom
             canvas.Scale(1f / zoomFactor);
@@ -38,15 +41,14 @@ namespace TilingSample
             // Apply translation to the canvas to handle panning (move the viewport)
             canvas.Translate(-offsetX, -offsetY);
 
-            var tileSize = TileConstants.TileSize;
-            // Calculate the size of each tile at the current zoom level
-            float tileSizeAtZoom = tileSize * zoomFactor;
+            var offsetXAtZoom = offsetX * zoomFactor;
+            var offsetYAtZoom = offsetY * zoomFactor;
 
             // Calculate the range of visible tiles at the given zoom level
             int startTileX = (int)Math.Floor(offsetX / tileSizeAtZoom);
             int endTileX = (int)Math.Ceiling((offsetX + canvas.LocalClipBounds.Width) / tileSizeAtZoom);
-            int startTileY = (int)Math.Floor(offsetY / tileSizeAtZoom);
-            int endTileY = (int)Math.Ceiling((offsetY + canvas.LocalClipBounds.Height) / tileSizeAtZoom);
+            int startTileY = (int)Math.Floor(offsetX / tileSizeAtZoom);
+            int endTileY = (int)Math.Ceiling((offsetX + canvas.LocalClipBounds.Height) / tileSizeAtZoom);
 
             // Loop through the visible range of tiles and draw them
             for (int tileX = startTileX; tileX < endTileX; tileX++)
@@ -67,7 +69,7 @@ namespace TilingSample
                         float drawY = tileY * tileSizeAtZoom;
 
                         // Draw the tile on the canvas
-                        canvas.DrawBitmap(tileBitmap, drawX, drawY);
+                        canvas.DrawBitmap(tileBitmap, new SKRect(drawX, drawY, drawX + tileSizeAtZoom, drawY + tileSizeAtZoom));
                     }
                 }
             }
