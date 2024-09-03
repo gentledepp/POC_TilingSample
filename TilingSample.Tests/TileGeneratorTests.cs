@@ -48,7 +48,10 @@ namespace TilingSample.Tests
             var fn = Path.Combine(Environment.CurrentDirectory, $"x1700_y900z-{(1f / zoomFactor).ToString(CultureInfo.InvariantCulture)}-rnder{rndr.Width}x{rndr.Height}.jpeg");
 
 
-            rndr.RenderBitmap(tileDir, fn, 1700, 900, zoomFactor);
+            var x = 1741;//* zoomFactor;
+            var y = 1000;//100 * zoomFactor;
+
+            rndr.RenderBitmap(tileDir, fn, x, y, zoomFactor);
         }
     }
 }

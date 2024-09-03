@@ -47,8 +47,8 @@ namespace TilingSample
             // Calculate the range of visible tiles at the given zoom level
             int startTileX = (int)Math.Floor(offsetX / tileSizeAtZoom);
             int endTileX = (int)Math.Ceiling((offsetX + canvas.LocalClipBounds.Width) / tileSizeAtZoom);
-            int startTileY = (int)Math.Floor(offsetX / tileSizeAtZoom);
-            int endTileY = (int)Math.Ceiling((offsetX + canvas.LocalClipBounds.Height) / tileSizeAtZoom);
+            int startTileY = (int)Math.Floor(offsetY / tileSizeAtZoom);
+            int endTileY = (int)Math.Ceiling((offsetY + canvas.LocalClipBounds.Height) / tileSizeAtZoom);
 
             // Loop through the visible range of tiles and draw them
             for (int tileX = startTileX; tileX < endTileX; tileX++)
