@@ -2,6 +2,7 @@
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using Xunit;
 
 namespace TilingSample.Tests
@@ -12,10 +13,13 @@ namespace TilingSample.Tests
         private const string largeFileName = "landscape_12000x6000";
 
         [Fact]
-        public void CanCreateTiles()
+        public void L_CanCreateTiles()
         {
             var file = Path.Combine(Environment.CurrentDirectory, $"{smallFileName}.jpg");
             var tileDir = Path.Combine(Environment.CurrentDirectory, $"tiles_{smallFileName}");
+            var td = new DirectoryInfo(tileDir);
+            if (td.Exists)
+                td.Delete(true);
 
             var gen = new TileGenerator();
 
@@ -26,14 +30,86 @@ namespace TilingSample.Tests
         }
 
         [Fact]
-        public void CanCreateTiles_Huge()
+        public void XL_CanCreateTiles()
         {
             var file = Path.Combine(Environment.CurrentDirectory, $"{largeFileName}.jpg");
             var tileDir = Path.Combine(Environment.CurrentDirectory, $"tiles_{largeFileName}");
+            var td = new DirectoryInfo(tileDir);
+            if (td.Exists)
+                td.Delete(true);
 
             var gen = new TileGenerator();
 
             gen.GenerateTiles(file, tileDir);
+
+            var tiles = Directory.EnumerateFiles(tileDir, "*.*", SearchOption.AllDirectories);
+            Assert.True(tiles.Any());
+        }
+
+        [Fact]
+        public void XL_CanCreateTilesInParallel()
+        {
+            var file = Path.Combine(Environment.CurrentDirectory, $"{largeFileName}.jpg");
+            var tileDir = Path.Combine(Environment.CurrentDirectory, $"tiles_{largeFileName}");
+            var td = new DirectoryInfo(tileDir);
+            if (td.Exists)
+                td.Delete(true);
+
+            var gen = new TileGenerator();
+
+            gen.GenerateTilesInParallel(file, tileDir);
+
+            var tiles = Directory.EnumerateFiles(tileDir, "*.*", SearchOption.AllDirectories);
+            Assert.True(tiles.Any());
+        }
+
+        [Fact]
+        public async Task XL_CanCreateTilesAsync()
+        {
+
+            var file = Path.Combine(Environment.CurrentDirectory, $"{largeFileName}.jpg");
+            var tileDir = Path.Combine(Environment.CurrentDirectory, $"tiles_{largeFileName}");
+            var td = new DirectoryInfo(tileDir);
+            if(td.Exists)
+                td.Delete(true);
+
+            var gen = new TileGenerator();
+
+            await gen.GenerateTilesAsync(file, tileDir);
+
+            var tiles = Directory.EnumerateFiles(tileDir, "*.*", SearchOption.AllDirectories);
+            Assert.True(tiles.Any());
+        }
+
+        [Fact]
+        public async Task XL_CanCreateTilesAsyncInParallel()
+        {
+            var file = Path.Combine(Environment.CurrentDirectory, $"{largeFileName}.jpg");
+            var tileDir = Path.Combine(Environment.CurrentDirectory, $"tiles_{largeFileName}");
+            var td = new DirectoryInfo(tileDir);
+            if (td.Exists)
+                td.Delete(true);
+
+            var gen = new TileGenerator();
+
+            await gen.GenerateTilesAsync(file, tileDir, -1);
+
+            var tiles = Directory.EnumerateFiles(tileDir, "*.*", SearchOption.AllDirectories);
+            Assert.True(tiles.Any());
+        }
+
+        [Fact]
+        public async Task XL_CanCreateTilesAsyncInParallel_LimitingParallelizationToOne()
+        {
+            var file = Path.Combine(Environment.CurrentDirectory, $"{largeFileName}.jpg");
+            var tileDir = Path.Combine(Environment.CurrentDirectory, $"tiles_{largeFileName}");
+            var td = new DirectoryInfo(tileDir);
+            if (td.Exists)
+                td.Delete(true);
+
+            var gen = new TileGenerator();
+
+            await gen.GenerateTilesAsync(file, tileDir, 1);
 
             var tiles = Directory.EnumerateFiles(tileDir, "*.*", SearchOption.AllDirectories);
             Assert.True(tiles.Any());
@@ -48,6 +124,9 @@ namespace TilingSample.Tests
         {
             var fileName = smallFileName;
             var tileDir = Path.Combine(Environment.CurrentDirectory, $"tiles_{fileName}");
+            var td = new DirectoryInfo(tileDir);
+            if (td.Exists)
+                td.Delete(true);
             var rndr = new TileRenderer(800, 600);
             var fn = Path.Combine(Environment.CurrentDirectory, $"x0_y0-z{(1f/zoomFactor).ToString(CultureInfo.InvariantCulture)}-rnder{rndr.Width}x{rndr.Height}.jpeg");
 
@@ -63,6 +142,10 @@ namespace TilingSample.Tests
         {
             var fileName = smallFileName;
             var tileDir = Path.Combine(Environment.CurrentDirectory, $"tiles_{fileName}");
+            var td = new DirectoryInfo(tileDir);
+            if (td.Exists)
+                td.Delete(true);
+
             var rndr = new TileRenderer(800, 600);
             var fn = Path.Combine(Environment.CurrentDirectory, $"x1700_y900z-{(1f / zoomFactor).ToString(CultureInfo.InvariantCulture)}-rnder{rndr.Width}x{rndr.Height}.jpeg");
 
@@ -87,6 +170,10 @@ namespace TilingSample.Tests
         {
             var fileName = largeFileName;
             var tileDir = Path.Combine(Environment.CurrentDirectory, $"tiles_{fileName}");
+            var td = new DirectoryInfo(tileDir);
+            if (td.Exists)
+                td.Delete(true);
+
             var rndr = new TileRenderer(800, 600);
             var fn = Path.Combine(Environment.CurrentDirectory, $"{fileName}x0_y0-z{(1f / zoomFactor).ToString(CultureInfo.InvariantCulture)}-rnder{rndr.Width}x{rndr.Height}.jpeg");
 
