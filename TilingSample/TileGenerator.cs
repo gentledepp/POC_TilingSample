@@ -47,10 +47,13 @@ public class TileGenerator
     /// <returns></returns>
     public Task GenerateTilesAsync(string sourceImagePath, string outputDirectory, int maxParallelTasks = -1)
     {
+        if (!Directory.Exists(outputDirectory))
+            Directory.CreateDirectory(outputDirectory);
+
         using var sourceImageStream = File.OpenRead(sourceImagePath);
         var tileOutputStreamProvider = new Func<string, string, Task<Stream>>((folderName, fileName) =>
             DefaultStreamProvider(Path.Combine(outputDirectory, folderName), fileName));
-        return GenerateTilesAsync(, tileOutputStreamProvider, maxParallelTasks: 1);
+        return GenerateTilesAsync(sourceImageStream, tileOutputStreamProvider, maxParallelTasks: 1);
     }
 
     /// <summary>
@@ -171,6 +174,9 @@ public class TileGenerator
     private static Task<Stream> DefaultStreamProvider(string zoomDir, string tileFileName)
     {
         // Save the tile to disk
+        var di = new DirectoryInfo(zoomDir);
+        if (!di.Exists) di.Create();
+
         string tilePath = Path.Combine(zoomDir, tileFileName);
         var fs = new FileStream(tilePath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, useAsync: true);
         return Task.FromResult<Stream>(fs);
