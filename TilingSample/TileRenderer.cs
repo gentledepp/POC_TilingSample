@@ -35,20 +35,22 @@ namespace TilingSample
             // Calculate the size of each tile at the current zoom level
             float tileSizeAtZoom = tileSize * zoomFactor;
 
+            // Apply translation to the canvas to handle panning (move the viewport)
+            canvas.Translate(-offsetX*zoomFactor, -offsetY* zoomFactor);
+
             // Apply scaling to the canvas to handle zoom
             canvas.Scale(1f / zoomFactor);
 
-            // Apply translation to the canvas to handle panning (move the viewport)
-            canvas.Translate(-offsetX, -offsetY);
-
             var offsetXAtZoom = offsetX * zoomFactor;
             var offsetYAtZoom = offsetY * zoomFactor;
+            var widthAtZoom = canvas.LocalClipBounds.Width / zoomFactor;
+            var heightAtZoom = canvas.LocalClipBounds.Height / zoomFactor;
 
-            // Calculate the range of visible tiles at the given zoom level
-            int startTileX = (int)Math.Floor(offsetX / tileSizeAtZoom);
-            int endTileX = (int)Math.Ceiling((offsetX + canvas.LocalClipBounds.Width) / tileSizeAtZoom);
-            int startTileY = (int)Math.Floor(offsetY / tileSizeAtZoom);
-            int endTileY = (int)Math.Ceiling((offsetY + canvas.LocalClipBounds.Height) / tileSizeAtZoom);
+            int startTileX = (int)Math.Floor(offsetXAtZoom / tileSize);
+            int endTileX = (int)Math.Ceiling((offsetXAtZoom + widthAtZoom) / tileSize);
+            int startTileY = (int)Math.Floor(offsetYAtZoom / tileSize);
+            int endTileY = (int)Math.Ceiling((offsetYAtZoom + heightAtZoom) / tileSize);
+
 
             // Loop through the visible range of tiles and draw them
             for (int tileX = startTileX; tileX < endTileX; tileX++)
@@ -64,12 +66,20 @@ namespace TilingSample
                         // Load the tile bitmap
                         using var tileBitmap = SKBitmap.Decode(tilePath);
 
+                        var t = tileSizeAtZoom;
                         // Calculate the position to draw the tile on the canvas
-                        float drawX = tileX * tileSizeAtZoom;
-                        float drawY = tileY * tileSizeAtZoom;
+                        float drawX = tileX * t;
+                        float drawY = tileY * t;
 
-                        // Draw the tile on the canvas
-                        canvas.DrawBitmap(tileBitmap, new SKRect(drawX, drawY, drawX + tileSizeAtZoom, drawY + tileSizeAtZoom));
+                        var area = new SKRect(drawX, drawY, drawX + t, drawY + t);
+
+                        // we can check if the area we are drawing is actually within the local clip bounds
+                        var isVisible = canvas.LocalClipBounds.IntersectsWith(area);
+                        if (isVisible)
+                        {
+                            // Draw the tile on the canvas
+                            canvas.DrawBitmap(tileBitmap, area);
+                        }
                     }
                 }
             }
