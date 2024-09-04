@@ -1,8 +1,12 @@
 ﻿using System;
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Shouldly;
+using SkiaSharp;
 using Xunit;
 
 namespace TilingSample.Tests
@@ -209,6 +213,84 @@ namespace TilingSample.Tests
 
 
             await rndr.RenderBitmapAsync(tileDir, fn, 0, 0, zoomFactor);
+        }
+
+
+        [Theory]
+        [InlineData(1.0f)]
+        [InlineData(0.5f)]
+        [InlineData(0.25f)]
+        [InlineData(0.125f)]
+        public async Task CanRenderAtOriginWithDifferentZoomFactors_UsingCache(float zoomFactor)
+        {
+            var fileName = SmallFileName;
+            var tileDir = Path.Combine(Environment.CurrentDirectory, $"tiles_{fileName}");
+            
+            var factory = new TestCache.Factory();
+            using var rndr = new TileRenderer(800, 600, factory);
+            var fn = Path.Combine(Environment.CurrentDirectory, $"x0_y0-z{(1f / zoomFactor).ToString(CultureInfo.InvariantCulture)}-rnder{rndr.Width}x{rndr.Height}.jpeg");
+
+
+            var sw = new Stopwatch();
+            sw.Start();
+
+            // first render loads all tiles
+            await rndr.RenderBitmapAsync(tileDir, fn, 0, 0, zoomFactor);
+
+            sw.Stop();
+            var nonCached = sw.Elapsed;
+
+            sw.Reset();
+            sw.Start();
+
+            // second render already has all tiles => should be magnitudes faster
+            await rndr.RenderBitmapAsync(tileDir, fn, 0, 0, zoomFactor);
+
+            sw.Stop();
+            var cached = sw.Elapsed;
+
+
+            cached.ShouldBeLessThan(nonCached);
+
+        }
+
+        private class TestCache : ITileCache
+        {
+            public class Factory : ITileCacheFactory
+            {
+                public ITileCache Create()
+                {
+                    return new TestCache();
+                }
+            }
+
+            private ConcurrentDictionary<string, SKBitmap> _cache = new();
+
+            public async Task<SKBitmap> GetOrCreateAsync(string zoomFolderName, string tileFileName, Func<string, string, Task<SKBitmap>> tileLoader)
+            {
+                var key = Path.Combine(zoomFolderName, tileFileName);
+
+
+                if (_cache.TryGetValue(key, out var bitmap))
+                    return bitmap;
+
+                bitmap = await tileLoader(zoomFolderName, tileFileName);
+                if (!_cache.TryAdd(key, bitmap))
+                {
+                    bitmap.Dispose();
+                    return _cache[key];
+                }
+
+                return bitmap;
+            }
+
+            public void Dispose()
+            {
+                foreach (var x in _cache)
+                {
+                    x.Value?.Dispose();
+                }
+            }
         }
     }
 }

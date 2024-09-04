@@ -6,15 +6,25 @@ using SkiaSharp;
 
 namespace TilingSample
 {
-    public class TileRenderer
+    public class TileRenderer : IDisposable
     {
+        private readonly ITileCache _cache;
         public int Width { get; private set; }
         public int Height { get; private set; }
+
         public TileRenderer(int width, int height)
+            : this(width,height, null)
+        {
+        }
+
+        public TileRenderer(int width, int height, ITileCacheFactory cacheFactory)
         {
             Width = width;
             Height = height;
+            _cache = cacheFactory.Create();
         }
+
+
         public void RenderBitmap(string tileFolderPath, string outputPath, float x, float y, float zoomFactor = 1)
         {
             using var tileBitmap = RenderBitmap(tileFolderPath, x, y, zoomFactor);
@@ -103,9 +113,15 @@ namespace TilingSample
             return bitmap;
         }
 
+
+
         public async Task RenderBitmapAsync(string tileFolderPath, string outputPath, float x, float y, float zoomFactor = 1)
         {
-            using var tileBitmap = await RenderBitmapAsync(tileFolderPath, x, y, zoomFactor);
+
+            var tileProvider = new Func<string, string, Task<Stream>>((folder, fileName) =>
+                LoadTileStreamAsync(Path.Combine(tileFolderPath, folder), fileName));
+
+            using var tileBitmap = await RenderBitmapAsync(tileProvider, x, y, zoomFactor);
 
 
             // Save the tile as a JPEG file
@@ -116,7 +132,8 @@ namespace TilingSample
         }
 
 
-        public async Task<SKBitmap> RenderBitmapAsync(string tileFolderPath, float offsetX, float offsetY, float zoomFactor = 1)
+
+        public async Task<SKBitmap> RenderBitmapAsync(Func<string,string, Task<Stream>> tileProvider, float offsetX, float offsetY, float zoomFactor = 1)
         {
             var tileSize = TileConstants.TileSize;
 
@@ -145,6 +162,8 @@ namespace TilingSample
             int startTileY = (int)Math.Floor(offsetYAtZoom / tileSize);
             int endTileY = (int)Math.Ceiling((offsetYAtZoom + heightAtZoom) / tileSize);
 
+            
+
             // List to hold all tasks for rendering tiles
             var renderTasks = new List<Task>();
 
@@ -160,32 +179,36 @@ namespace TilingSample
                     // Start a new task to load and render each tile
                     renderTasks.Add(Task.Run(async () =>
                     {
-                        string tilePath = Path.Combine(tileFolderPath, $"z{zoomLevel}", $"y{localTileY}_x{localTileX}.jpg");
+                        // Load the tile asynchronously
+                        var tileBitmap = await LoadTileAsync($"z{zoomLevel}", $"y{localTileY}_x{localTileX}.jpg", tileProvider);
 
-                        if (File.Exists(tilePath))
+                        if (tileBitmap != null)
                         {
-                            // Load the tile asynchronously
-                            using var tileBitmap = await LoadTileAsync(tilePath);
-
-                            if (tileBitmap != null)
+                            try
                             {
-                                // Calculate the position to draw the tile on the canvas
-                                float drawX = localTileX * tileSizeAtZoom;
-                                float drawY = localTileY * tileSizeAtZoom;
 
-                                // Ensure the draw area is within the visible portion of the canvas
-                                var area = new SKRect(drawX, drawY, drawX + tileSizeAtZoom, drawY + tileSizeAtZoom);
-                                bool isVisible = canvas.LocalClipBounds.IntersectsWith(area);
+                                    // Calculate the position to draw the tile on the canvas
+                                    float drawX = localTileX * tileSizeAtZoom;
+                                    float drawY = localTileY * tileSizeAtZoom;
 
-                                if (isVisible)
-                                {
-                                    // Lock the canvas to ensure thread safety while drawing
-                                    lock (canvas)
+                                    // Ensure the draw area is within the visible portion of the canvas
+                                    var area = new SKRect(drawX, drawY, drawX + tileSizeAtZoom, drawY + tileSizeAtZoom);
+                                    bool isVisible = canvas.LocalClipBounds.IntersectsWith(area);
+
+                                    if (isVisible)
                                     {
-                                        // Draw the tile on the canvas
-                                        canvas.DrawBitmap(tileBitmap, area);
+                                        // Lock the canvas to ensure thread safety while drawing
+                                        lock (canvas)
+                                        {
+                                            // Draw the tile on the canvas
+                                            canvas.DrawBitmap(tileBitmap, area);
+                                        }
                                     }
-                                }
+                            }
+                            finally
+                            {
+                                if(_cache is null)
+                                    tileBitmap.Dispose();
                             }
                         }
                     }));
@@ -198,19 +221,60 @@ namespace TilingSample
             return bitmap;
         }
 
-        // Asynchronous method to load a tile from disk
-        private async Task<SKBitmap> LoadTileAsync(string tilePath)
+        private async Task<Stream> LoadTileStreamAsync(string zoomFolderName, string tileFileName)
         {
+            var tilePath = Path.Combine(zoomFolderName, tileFileName);
+
+            if (!File.Exists(tilePath))
+            {
+                return null;
+            }
+
             using FileStream fs = new FileStream(tilePath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, useAsync: true);
-            using var memoryStream = new MemoryStream();
+            var memoryStream = new MemoryStream();
 
             // Asynchronously copy the file content to the memory stream
             await fs.CopyToAsync(memoryStream);
 
             // Decode the bitmap from the memory stream
             memoryStream.Position = 0;
-            return SKBitmap.Decode(memoryStream);
+            return memoryStream;
         }
 
+        // Asynchronous method to load a tile from disk
+        private async Task<SKBitmap> LoadTileAsync(string zoomFolderName, string tileFileName, Func<string, string, Task<Stream>> tileProvider)
+        {
+            if (_cache is { } cache)
+            {
+                return await cache.GetOrCreateAsync(zoomFolderName, tileFileName,
+                    (zfn, fn) => LoadTile(zfn, fn, tileProvider));
+            }
+
+            return await LoadTile(zoomFolderName, tileFileName, tileProvider);
+        }
+
+        private static async Task<SKBitmap> LoadTile(string zoomFolderName, string tileFileName, Func<string, string, Task<Stream>> tileProvider)
+        {
+            using var stream = await tileProvider.Invoke(zoomFolderName, tileFileName);
+            if (stream is null)
+                return null;
+            return SKBitmap.Decode(stream);
+        }
+
+        public void Dispose()
+        {
+            _cache?.Dispose();
+        }
+    }
+
+    public interface ITileCache : IDisposable
+    {
+        Task<SKBitmap> GetOrCreateAsync(string zoomFolderName, string tileFileName,
+            Func<string, string, Task<SKBitmap>> tileLoader);
+    }
+
+    public interface ITileCacheFactory
+    {
+        ITileCache Create();
     }
 }
