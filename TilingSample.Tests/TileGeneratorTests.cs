@@ -8,13 +8,20 @@ using System.Threading.Tasks;
 using Shouldly;
 using SkiaSharp;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace TilingSample.Tests
 {
     public class TileGeneratorTests
     {
+        private readonly ITestOutputHelper _output;
         const string SmallFileName = "mountain_4000x1800";
         private const string LargeFileName = "landscape_12000x6000";
+
+        public TileGeneratorTests(ITestOutputHelper output)
+        {
+            _output = output;
+        }
 
         [Fact]
         public async Task L_CanCreateTiles()
@@ -107,10 +114,11 @@ namespace TilingSample.Tests
         [InlineData(0.5f)]
         [InlineData(0.25f)]
         [InlineData(0.125f)]
-        public void CanRenderAtOriginWithDifferentZoomFactors(float zoomFactor)
+        public async Task CanRenderAtOriginWithDifferentZoomFactors(float zoomFactor)
         {
             var fileName = SmallFileName;
-            var tileDir = Path.Combine(Environment.CurrentDirectory, $"tiles_{fileName}");
+            var tileDir = await ArrangeTiles(fileName);
+
             var rndr = new TileRenderer(800, 600);
             var fn = Path.Combine(Environment.CurrentDirectory, $"x0_y0-z{(1f/zoomFactor).ToString(CultureInfo.InvariantCulture)}-rnder{rndr.Width}x{rndr.Height}.jpeg");
 
@@ -122,10 +130,10 @@ namespace TilingSample.Tests
         [InlineData(1.0f)]
         [InlineData(0.5f)]
         [InlineData(0.25f)]
-        public void CanRenderAtImageCenterWithDifferentZoomFactors(float zoomFactor)
+        public async Task CanRenderAtImageCenterWithDifferentZoomFactors(float zoomFactor)
         {
             var fileName = SmallFileName;
-            var tileDir = Path.Combine(Environment.CurrentDirectory, $"tiles_{fileName}");
+            var tileDir = await ArrangeTiles(fileName);
             var rndr = new TileRenderer(800, 600);
             var fn = Path.Combine(Environment.CurrentDirectory, $"x1700_y900z-{(1f / zoomFactor).ToString(CultureInfo.InvariantCulture)}-rnder{rndr.Width}x{rndr.Height}.jpeg");
 
@@ -146,15 +154,15 @@ namespace TilingSample.Tests
         [InlineData(0.125f)]
         [InlineData(0.0625f)]
         [InlineData(0.03125f)]
-        public void CanRenderHugeImageAtOriginWithDifferentZoomFactors(float zoomFactor)
+        public async Task CanRenderHugeImageAtOriginWithDifferentZoomFactors(float zoomFactor)
         {
             var fileName = LargeFileName;
-            var tileDir = Path.Combine(Environment.CurrentDirectory, $"tiles_{fileName}");
+            var tileDir = await ArrangeTiles(fileName);
             var rndr = new TileRenderer(800, 600);
             var fn = Path.Combine(Environment.CurrentDirectory, $"{fileName}x0_y0-z{(1f / zoomFactor).ToString(CultureInfo.InvariantCulture)}-rnder{rndr.Width}x{rndr.Height}.jpeg");
 
 
-            rndr.RenderBitmap(tileDir, fn, 0, 0, zoomFactor);
+            await rndr.RenderBitmapAsync(tileDir, fn, 0, 0, zoomFactor);
         }
 
 
@@ -166,7 +174,7 @@ namespace TilingSample.Tests
         public async Task CanRenderAsyncAtOriginWithDifferentZoomFactors(float zoomFactor)
         {
             var fileName = SmallFileName;
-            var tileDir = Path.Combine(Environment.CurrentDirectory, $"tiles_{fileName}");
+            var tileDir = await ArrangeTiles(fileName);
             var rndr = new TileRenderer(800, 600);
             var fn = Path.Combine(Environment.CurrentDirectory, $"x0_y0-z{(1f / zoomFactor).ToString(CultureInfo.InvariantCulture)}-rnder{rndr.Width}x{rndr.Height}.jpeg");
 
@@ -181,7 +189,7 @@ namespace TilingSample.Tests
         public async Task CanRenderAsyncAtImageCenterWithDifferentZoomFactors(float zoomFactor)
         {
             var fileName = SmallFileName;
-            var tileDir = Path.Combine(Environment.CurrentDirectory, $"tiles_{fileName}");
+            var tileDir = await ArrangeTiles(fileName);
 
             var rndr = new TileRenderer(800, 600);
             var fn = Path.Combine(Environment.CurrentDirectory, $"x1700_y900z-{(1f / zoomFactor).ToString(CultureInfo.InvariantCulture)}-rnder{rndr.Width}x{rndr.Height}.jpeg");
@@ -206,7 +214,7 @@ namespace TilingSample.Tests
         public async Task CanRenderAsyncHugeImageAtOriginWithDifferentZoomFactors(float zoomFactor)
         {
             var fileName = LargeFileName;
-            var tileDir = Path.Combine(Environment.CurrentDirectory, $"tiles_{fileName}");
+            var tileDir = await ArrangeTiles(fileName);
 
             var rndr = new TileRenderer(800, 600);
             var fn = Path.Combine(Environment.CurrentDirectory, $"{fileName}x0_y0-z{(1f / zoomFactor).ToString(CultureInfo.InvariantCulture)}-rnder{rndr.Width}x{rndr.Height}.jpeg");
@@ -221,11 +229,11 @@ namespace TilingSample.Tests
         [InlineData(0.5f)]
         [InlineData(0.25f)]
         [InlineData(0.125f)]
-        public async Task CanRenderAtOriginWithDifferentZoomFactors_UsingCache(float zoomFactor)
+        public async Task CanRenderAsyncAtOriginWithDifferentZoomFactors_UsingCache(float zoomFactor)
         {
             var fileName = SmallFileName;
-            var tileDir = Path.Combine(Environment.CurrentDirectory, $"tiles_{fileName}");
-            
+            var tileDir = await ArrangeTiles(fileName);
+
             var factory = new TestCache.Factory();
             using var rndr = new TileRenderer(800, 600, factory);
             var fn = Path.Combine(Environment.CurrentDirectory, $"x0_y0-z{(1f / zoomFactor).ToString(CultureInfo.InvariantCulture)}-rnder{rndr.Width}x{rndr.Height}.jpeg");
@@ -249,11 +257,30 @@ namespace TilingSample.Tests
             sw.Stop();
             var cached = sw.Elapsed;
 
+            _output.WriteLine($"noncached: {nonCached}\ncached:   {cached}");
 
             cached.ShouldBeLessThan(nonCached);
 
         }
 
+        private async Task<string> ArrangeTiles(string fileName)
+        {
+            var file = Path.Combine(Environment.CurrentDirectory, $"{fileName}.jpg");
+            var tileDir = Path.Combine(Environment.CurrentDirectory, $"tiles_{fileName}");
+            var td = new DirectoryInfo(tileDir);
+            if (!td.Exists)
+            {
+                _output.WriteLine($"tileDir not found - recreating tiles");
+                await new TileGenerator().GenerateTilesAsync(file, tileDir, int.MaxValue);
+            }
+            return tileDir;
+        }
+
+        /// <summary>
+        /// Note: This is a primitive cache implementation.
+        /// Please use IMemoryCache which can also remove entries after some time (e.g 30 seconds) and allows a maximum number of entries (e.g. 12)
+        /// Also, in iCL Filler there is a public class `InMemoryCache : IInMemoryCache` which also **Disposes** entries when they are removed! (SKBitmap must be disposed to avoid memory leaks)
+        /// </summary>
         private class TestCache : ITileCache
         {
             public class Factory : ITileCacheFactory

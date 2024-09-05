@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using SkiaSharp;
 
@@ -21,7 +22,7 @@ namespace TilingSample
         {
             Width = width;
             Height = height;
-            _cache = cacheFactory.Create();
+            _cache = cacheFactory?.Create();
         }
 
 
@@ -113,8 +114,6 @@ namespace TilingSample
             return bitmap;
         }
 
-
-
         public async Task RenderBitmapAsync(string tileFolderPath, string outputPath, float x, float y, float zoomFactor = 1)
         {
 
@@ -130,8 +129,6 @@ namespace TilingSample
             using var output = File.OpenWrite(outputPath);
             data.SaveTo(output);
         }
-
-
 
         public async Task<SKBitmap> RenderBitmapAsync(Func<string,string, Task<Stream>> tileProvider, float offsetX, float offsetY, float zoomFactor = 1)
         {
@@ -162,10 +159,8 @@ namespace TilingSample
             int startTileY = (int)Math.Floor(offsetYAtZoom / tileSize);
             int endTileY = (int)Math.Ceiling((offsetYAtZoom + heightAtZoom) / tileSize);
 
-            
-
             // List to hold all tasks for rendering tiles
-            var renderTasks = new List<Task>();
+            var tileLoadTasks = new List<Task<(float x,float y, SKBitmap tileBitmap)>>();
 
             // Loop through the visible range of tiles and render them asynchronously
             for (int tileX = startTileX; tileX < endTileX; tileX++)
@@ -177,46 +172,47 @@ namespace TilingSample
                     int localTileY = tileY;
 
                     // Start a new task to load and render each tile
-                    renderTasks.Add(Task.Run(async () =>
+                    tileLoadTasks.Add(Task.Run(async () =>
                     {
-                        // Load the tile asynchronously
-                        var tileBitmap = await LoadTileAsync($"z{zoomLevel}", $"y{localTileY}_x{localTileX}.jpg", tileProvider);
+                        var bmp = await LoadTileAsync($"z{zoomLevel}", $"y{localTileY}_x{localTileX}.jpg", tileProvider);
+                        // Calculate the position to draw the tile on the canvas
+                        float drawX = localTileX * tileSizeAtZoom;
+                        float drawY = localTileY * tileSizeAtZoom;
 
-                        if (tileBitmap != null)
-                        {
-                            try
-                            {
-
-                                    // Calculate the position to draw the tile on the canvas
-                                    float drawX = localTileX * tileSizeAtZoom;
-                                    float drawY = localTileY * tileSizeAtZoom;
-
-                                    // Ensure the draw area is within the visible portion of the canvas
-                                    var area = new SKRect(drawX, drawY, drawX + tileSizeAtZoom, drawY + tileSizeAtZoom);
-                                    bool isVisible = canvas.LocalClipBounds.IntersectsWith(area);
-
-                                    if (isVisible)
-                                    {
-                                        // Lock the canvas to ensure thread safety while drawing
-                                        lock (canvas)
-                                        {
-                                            // Draw the tile on the canvas
-                                            canvas.DrawBitmap(tileBitmap, area);
-                                        }
-                                    }
-                            }
-                            finally
-                            {
-                                if(_cache is null)
-                                    tileBitmap.Dispose();
-                            }
-                        }
+                        return (x: drawX, y: drawY, tileBitmap: bmp);
                     }));
                 }
             }
 
-            // Wait for all rendering tasks to complete
-            await Task.WhenAll(renderTasks);
+            while (tileLoadTasks.Any())
+            {
+                var tileLoadTask = await Task.WhenAny(tileLoadTasks);
+                tileLoadTasks.Remove(tileLoadTask);
+
+                var (x,y,tileBitmap) = await tileLoadTask;
+
+                if (tileBitmap != null)
+                {
+                    try
+                    {
+                        // Ensure the draw area is within the visible portion of the canvas
+                        var area = new SKRect(x, y, x + tileSizeAtZoom, y + tileSizeAtZoom);
+                        bool isVisible = canvas.LocalClipBounds.IntersectsWith(area);
+
+                        if (isVisible)
+                        {
+                            // Draw the tile on the canvas
+                            canvas.DrawBitmap(tileBitmap, area);
+                     
+                        }
+                    }
+                    finally
+                    {
+                        if (_cache is null)
+                            tileBitmap.Dispose();
+                    }
+                }
+            }
 
             return bitmap;
         }
